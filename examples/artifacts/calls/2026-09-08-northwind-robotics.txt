@@ -1,0 +1,10 @@
+Account: Northwind Robotics
+Date: 2026-09-08
+Rep: Dana Cole
+
+Dana Cole: Thanks for making time. What prompted the conversation?
+Priya Shah: Our field techs log every service visit by hand. It takes us about two days to close out a month.
+Priya Shah: The manual reconciliation is the real bottleneck, and we keep losing parts data between systems.
+Marco Ruiz: We are also evaluating PipeIQ, so I need to see how you compare.
+Marco Ruiz: Honestly the pricing looks high for a team of forty.
+Dana Cole: Understood. As a next step I will send over a pricing breakdown by seat tier.

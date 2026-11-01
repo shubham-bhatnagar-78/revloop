@@ -1,0 +1,8 @@
+Account: Acme Freight
+Date: 2026-08-20
+Rep: Dana Cole
+
+Dana Cole: Where does dispatch planning hurt the most today?
+Lena Okafor: We are frustrated with spreadsheets. Dispatchers re-key every load into three tools.
+Lena Okafor: Budget is tight until the new fiscal year, so timing matters.
+Dana Cole: Makes sense. Let's schedule a follow up with your finance lead next week.

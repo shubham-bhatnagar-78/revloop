@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# uv
+.venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
+# SQLite databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3

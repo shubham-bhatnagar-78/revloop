@@ -1,0 +1,13 @@
+name: competitor-mentioned
+description: >
+  A competitor came up in a call or email. Log it on the CRM record and line up a
+  battlecard follow-up before the next touchpoint.
+trigger:
+  has_kind: [competitor]
+actions:
+  - type: crm_note
+    template: |
+      Competitor mentioned: {competitor}. Current stage: {stage}. Latest objection: "{objection}"
+  - type: task
+    template: |
+      Review the {competitor} battlecard and prepare a comparison for {account} before: {next_step}

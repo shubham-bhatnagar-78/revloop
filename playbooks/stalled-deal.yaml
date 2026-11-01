@@ -1,0 +1,19 @@
+name: stalled-deal
+description: >
+  A late-stage deal has gone quiet. Draft a re-engagement email that speaks to the
+  account's latest pain and objection.
+trigger:
+  stage_in: [proposal, negotiation]
+  no_new_facts_days: 21
+actions:
+  - type: email_draft
+    template: |
+      To: {stakeholder}
+      Subject: Picking up where we left off
+
+      Hi {stakeholder},
+
+      When we last spoke you mentioned: "{pain}"
+      You also raised: "{objection}"
+
+      I have a short proposal for handling that concern. Would 20 minutes this week work?
