@@ -1,26 +1,86 @@
+<div align="center">
+
 # revloop
 
-Keep GTM context current for sales teams and AI agents, and measure whether the actions agents propose actually move deals.
+### Shared memory for GTM teams and their AI agents, with a scoreboard attached.
 
-## The problem
+[![CI](https://github.com/shubham-bhatnagar-78/revloop/actions/workflows/ci.yml/badge.svg)](https://github.com/shubham-bhatnagar-78/revloop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-server-8a3ffc.svg)](https://modelcontextprotocol.io/)
 
-What a team knows about a deal is spread across call recordings, email threads, and the CRM, and it changes every week. The stage moves, a new competitor shows up, the next step gets replaced. An agent that drafts an email from last month's context will write the wrong email.
+</div>
 
-There is a second gap. Teams add agents that propose follow-ups, but almost nobody checks whether those follow-ups changed anything. Did the deals that got the re-engagement email move faster than the ones that did not?
+---
 
-revloop is a small tool I built to work on both problems: one store of current, sourced facts per account, and a simple before/after comparison for every playbook.
+> Your CRM says the deal is in negotiation.
+> The call from Tuesday says it's dead.
+> Your agent just wrote a follow-up based on the CRM.
 
-## What revloop does
+Everything a team knows about a deal is scattered across calls, emails, and the CRM, and it changes every week. An agent drafting from last month's context writes the wrong email, confidently. And almost nobody checks whether the follow-ups their agents propose changed anything at all.
 
-1. **Context extractors.** Turns call transcripts (`.txt`), emails (`.eml`), and CRM CSV exports into structured facts. Each fact has an account, a kind, a value, a source (file and line), and a timestamp. Kinds: `pain`, `objection`, `competitor`, `next_step`, `stakeholder`, `stage`, `amount`. The default extractor is a set of deterministic keyword and pattern rules that runs offline. If `ANTHROPIC_API_KEY` is set, an LLM extractor that asks Claude for schema-constrained JSON is used instead (install with `uv sync --extra llm`). CRM columns from HubSpot and Salesforce exports are both recognised ("Company name" or "Account Name", "Deal Stage" or "Stage", and so on).
-2. **Memory.** A SQLite store. For single-valued kinds (`stage`, `amount`, `next_step`) a newer fact supersedes the older one, so the current view stays current, and the old fact is kept as history. Multi-valued kinds (`pain`, `objection`, `competitor`, `stakeholder`) accumulate and are deduplicated.
-3. **Playbooks.** YAML files with trigger conditions over the store and action templates filled from facts. Two ship with the repo: `stalled-deal` and `competitor-mentioned`. Actions are only proposed. A person approves or rejects each one. revloop never sends anything anywhere.
-4. **Outcome measurement.** Import later CRM stage snapshots, and revloop compares, per playbook, accounts that got an approved action against accounts that matched the same trigger but got none. It reports the share that advanced stage within a window and the difference between the two groups.
-5. **MCP server.** Exposes the store to any MCP client (Claude Code, Cursor) through five tools: `get_account_context`, `search_facts`, `propose_action`, `list_pending_actions`, `outcome_report`.
+revloop is a small, self-hosted tool for both halves: **one current view of every account with provenance on every fact**, and **a straight comparison that tells you whether approved actions actually moved pipeline**.
+
+## See it
+
+Three sources disagree about Northwind Robotics. revloop keeps the newest and remembers the rest:
+
+```console
+$ revloop context "Northwind Robotics" --history
+
+next_step   Send security questionnaire responses by Friday
+            emails/2026-09-15-northwind-robotics.eml:12   2026-09-15
+  superseded  Legal review of the MSA
+              crm/salesforce-opportunities.csv:3          2026-09-10
+  superseded  Loop in their CISO for the security review
+              calls/2026-09-08-northwind-robotics.txt:24  2026-09-08
+
+stage       negotiation      crm/salesforce-opportunities.csv:3
+competitor  Vantage          calls/2026-09-08-northwind-robotics.txt:18
+pain        Manual reconciliation eats two days a month
+objection   Procurement needs SOC 2 before signing
+```
+
+Every fact carries the file and line it came from. Nothing is invented, and an agent reading this can cite its source.
+
+Later, once deals have had time to move:
+
+```console
+$ revloop report
+
+Share of matched accounts that advanced stage within 30 days of the match
+
+stalled-deal
+  approved action : 1/1 advanced (100%)
+  holdout         : 0/1 advanced (0%)
+  uplift          : not enough data (need >= 10 accounts per group)
+
+Not a randomised test: a human chose which actions to approve, so selection bias is likely.
+```
+
+A measurement tool that refuses to claim an effect it cannot support. That is the whole idea.
+
+## Who this is for
+
+- You are wiring agents into a GTM stack and need them to read something better than a stale CRM field.
+- You already have agents proposing follow-ups and cannot prove they help.
+- You want the context layer on your own machine, in SQLite, in files you can read.
+
+Not for you if you want lead enrichment or an outbound sender. revloop deliberately does neither.
+
+## What it does
+
+| | |
+| --- | --- |
+| **Extract** | Call transcripts, `.eml` emails, and CRM CSVs become structured facts: `pain`, `objection`, `competitor`, `next_step`, `stakeholder`, `stage`, `amount`. HubSpot and Salesforce column names both recognised. Offline rules by default, Claude with schema-constrained JSON when you want it. |
+| **Remember** | SQLite. A newer `stage`, `amount`, or `next_step` supersedes the old one, so current stays current and history is kept. Pains, objections, competitors, and stakeholders accumulate and dedupe. |
+| **Propose** | YAML playbooks match conditions over the store and fill templates from real facts. Actions are only ever **proposed**. A person approves. revloop sends nothing, anywhere, ever. |
+| **Measure** | Import later CRM stage snapshots. Per playbook, accounts with an approved action are compared against accounts that matched the same trigger and got none. |
+| **Serve** | An MCP server hands the whole store to Claude Code, Cursor, or any MCP client through five tools. |
 
 ## Quickstart
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.12. Run from the repository root. The `--now` flags pin the evaluation date so the fictional example data gives the same result whenever you run it.
+Needs [uv](https://docs.astral.sh/uv/) and Python 3.12. The `--now` flags pin the date so the fictional sample data gives the same answer whenever you run it.
 
 ```bash
 uv sync
@@ -40,29 +100,9 @@ uv run revloop outcomes import examples/outcomes.csv
 uv run revloop report --now 2026-11-01
 ```
 
-The last command prints:
+Every command takes `--db PATH` (default `./revloop.db`). Tests: `uv run pytest`.
 
-```
-Share of matched accounts that advanced stage within 30 days of the match
-
-competitor-mentioned
-  approved action : 1/1 advanced (100%)
-  holdout         : 0/0 advanced (0%)
-  uplift          : not enough data (need >= 10 accounts per group)
-
-stalled-deal
-  approved action : 1/1 advanced (100%)
-  holdout         : 0/1 advanced (0%)
-  uplift          : not enough data (need >= 10 accounts per group)
-
-Not a randomised test: a human chose which actions to approve, so selection bias is likely.
-```
-
-Four example accounts is far too few to say anything, and the report says so.
-
-Every command takes `--db PATH` (default `./revloop.db`). Run tests with `uv run pytest`.
-
-## MCP setup for Claude Code
+## Give it to your agent
 
 ```bash
 claude mcp add revloop -- uv run --directory /path/to/revloop revloop --db /path/to/revloop/revloop.db mcp
@@ -81,7 +121,9 @@ Or in a project `.mcp.json`:
 }
 ```
 
-`propose_action` only records a proposal with status `proposed`. A person still runs `revloop approve <id>`.
+Tools: `get_account_context`, `search_facts`, `propose_action`, `list_pending_actions`, `outcome_report`.
+
+`propose_action` records a proposal with status `proposed`. A person still runs `revloop approve <id>`. **An agent cannot approve its own work.**
 
 ## Architecture
 
@@ -110,7 +152,9 @@ flowchart LR
 | `server.py` | MCP tools |
 | `cli.py` | `revloop` command |
 
-## Playbook format
+**894 lines of source. 36 tests. Two dependencies.** No daemon, no account, no cloud.
+
+## Writing a playbook
 
 ```yaml
 name: stalled-deal
@@ -125,32 +169,27 @@ actions:
       Hi {stakeholder}, you mentioned "{pain}" and raised "{objection}".
 ```
 
-All trigger conditions must hold. Templates can use `{account}` and any fact kind; each placeholder gets the most recent current value of that kind, or `(none recorded)` if there is none, so a reviewer sees the gap instead of a made-up detail. A playbook proposes actions for an account once; running it again skips accounts it has already handled.
+All trigger conditions must hold. Templates take `{account}` and any fact kind; each placeholder gets the most recent current value, or `(none recorded)` if there is none, so a reviewer sees the gap instead of a fabricated detail. A playbook handles each account once.
 
-Stage names are normalised to `prospecting`, `qualification`, `discovery`, `demo`, `proposal`, `negotiation`, `closed_won`, with common HubSpot and Salesforce stage names mapped onto them (for example `contractsent` and `Negotiation/Review` both become `negotiation`).
+Stages normalise to `prospecting`, `qualification`, `discovery`, `demo`, `proposal`, `negotiation`, `closed_won`, with common HubSpot and Salesforce names mapped on (`contractsent` and `Negotiation/Review` both become `negotiation`).
 
-## How outcome measurement works, and its limits
+## How the measurement works
 
-- When a playbook matches an account, revloop records the match time and the account's stage at that moment.
-- An account counts as **advanced** if any imported stage snapshot within the window (default 30 days, `--window`) shows a later stage in the order above. `closed_lost` never counts as advancing.
-- **Approved** group: matches where at least one proposed action was approved. **Holdout** group: matches where nothing was approved (rejected or never reviewed).
-- Matches whose window has not closed yet, and matches where the starting stage is unknown, are left out and counted separately.
-- With at least 10 accounts in each group, revloop prints the uplift (difference in advance rates) and a pooled two-proportion z-test. Below that it prints "not enough data".
+- When a playbook matches an account, revloop records the match time and the stage at that moment.
+- An account **advanced** if any imported snapshot within the window (default 30 days, `--window`) shows a later stage. `closed_lost` never counts.
+- **Approved**: matches where at least one action was approved. **Holdout**: matches where nothing was approved, whether rejected or never reviewed.
+- Matches whose window is still open, or whose starting stage is unknown, are excluded and counted separately.
+- With at least 10 accounts per group it prints the uplift and a pooled two-proportion z-test. Below that it says so.
 
-Limits, stated plainly:
+## What it will not do
 
-- This is not a controlled experiment. People choose what to approve, and they may approve actions for deals that were already healthy. Treat the uplift as a signal to investigate, not as proof. A proper test would randomly hold out some matches before review.
-- The rule-based extractor is keyword matching. It is predictable and testable, but it misses paraphrases and can pick up false positives (for example, it treats any capitalised name after "evaluating" as a competitor). The LLM extractor reads text better but is not deterministic.
-- A playbook handles each account once, so an account that stalls a second time is not re-proposed.
-- Time is measured from CRM and artifact timestamps. If those are wrong, the report is wrong.
+Stated plainly, because a tool that measures things should be honest about its own limits.
 
-## How it differs from YALC and Clay
-
-[YALC](https://github.com/Othmane-Khadri/YALC-the-GTM-operating-system) and [Clay](https://www.clay.com/) focus on finding and enriching leads and running outbound campaigns, and they do that well. revloop does not enrich or send anything. It focuses on the part after the first touch: keeping each account's changing context current for the people and agents working the deal, and checking whether the actions they take moved pipeline. They work well together: use YALC or Clay to start conversations, and revloop to keep track of what those conversations taught you and whether your follow-ups helped.
-
-## Credits
-
-Inspired by YALC by Othmane Khadri (MIT). No YALC code is used.
+- **This is not a controlled experiment.** People choose what to approve, and they tend to approve actions for deals that already look healthy. Treat uplift as a signal to investigate, not proof. A proper test randomly holds out some matches before review.
+- **The rule extractor is keyword matching.** Predictable and testable, but it misses paraphrases and produces false positives: any capitalised name after "evaluating" is read as a competitor. The LLM extractor reads text better and is not deterministic.
+- **One proposal per account per playbook.** An account that stalls a second time is not re-proposed.
+- **No enrichment, no sending.** revloop does not find leads, enrich records, or deliver a single message. It is the memory and the scoreboard. Pair it with whatever you already use to start conversations.
+- **Timestamps are taken on trust.** If your CRM dates are wrong, the report is wrong.
 
 ## License
 
